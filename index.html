@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="cupcake">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HIIT Timer</title>
+    <!-- Tailwind and DaisyUI -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Custom styles -->
+    <style>
+        [x-cloak] { display: none !important; }
+        
+        @keyframes fallDown {
+            0% {
+                transform: translateY(-100vh) scale(0);
+                opacity: 0;
+            }
+            50% {
+                transform: translateY(var(--fall-distance)) scale(1.5);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) scale(1);
+                opacity: 0;
+            }
+        }
+
+        .celebration-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .tada {
+            position: absolute;
+            font-size: 5rem;
+            animation: fallDown 3s ease-in forwards;
+            opacity: 0;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-base-200">
+    <div x-data="timerApp()" x-cloak class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <h1 class="text-4xl font-bold text-center mb-8">HIIT Timer</h1>
+
+        <!-- Main Timer Display -->
+        <div class="card mb-8 transition-colors duration-300"
+             :class="{
+                'bg-success text-success-content': phase === 'work',
+                'bg-error text-error-content': phase === 'rest',
+                'bg-warning text-warning-content': phase === 'warmup',
+                'bg-info text-info-content': phase === 'cooldown',
+                'bg-base-100': phase === 'ready',
+                'opacity-75': !isRunning && phase !== 'ready'
+             }">
+            <div class="card-body items-center text-center">
+                <!-- Total Duration Preview -->
+                <div class="opacity-80 mb-2">
+                    Total Duration: <span x-text="formatTime(calculateTotalDuration())"></span>
+                </div>
+                
+                <div x-text="formatTime(currentTime)" 
+                     class="font-mono text-7xl md:text-8xl font-bold mb-4">
+                    00:00
+                </div>
+                
+                <!-- Round Counter -->
+                <div class="text-lg mb-2" x-show="phase !== 'ready' && phase !== 'warmup' && phase !== 'cooldown'">
+                    Round <span x-text="currentRound"></span>/<span x-text="settings.rounds"></span>
+                </div>
+                
+                <!-- Phase Indicator -->
+                <div class="text-2xl font-bold mb-4" x-text="phase.toUpperCase()">
+                    READY
+                </div>
+                
+                <!-- Progress Bar -->
+                <div class="w-full bg-black/20 rounded-full h-2.5 mb-4">
+                    <div class="h-full rounded-full transition-all duration-1000 bg-black/20"
+                         :style="'width: ' + progress + '%'">
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="flex flex-wrap gap-4 justify-center mt-4">
+                    <button @click="toggleTimer()" 
+                            class="btn btn-lg text-xl min-w-[120px]"
+                            :class="{
+                                'btn-outline': !isRunning,
+                                'btn-error btn-outline': isRunning
+                            }"
+                            x-text="isRunning ? 'Pause' : 'Start'">
+                        Start
+                    </button>
+                    <button @click="resetTimer()" 
+                            class="btn btn-lg text-xl min-w-[120px]"
+                            :class="{
+                                'btn-outline': isRunning,
+                                'btn-outline btn-neutral': !isRunning
+                            }">
+                        Reset
+                    </button>
+                    <button @click="toggleSound()" 
+                            class="btn btn-lg text-2xl btn-outline"
+                            :class="{'btn-active': soundEnabled}">
+                        <span x-show="soundEnabled">🔊</span>
+                        <span x-show="!soundEnabled">🔇</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Left Column -->
+            <div class="space-y-8">
+                <!-- Preset Selection -->
+                <div class="card bg-base-100 shadow-xl">
+                    <div class="card-body">
+                        <h2 class="card-title">Preset Workouts</h2>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button @click="loadPreset('tabata')" class="btn btn-outline">Tabata</button>
+                            <button @click="loadPreset('30-30')" class="btn btn-outline">30/30</button>
+                            <button @click="loadPreset('40-20')" class="btn btn-outline">40/20</button>
+                            <button @click="loadPreset('45-15')" class="btn btn-outline">45/15</button>
+                            <button @click="loadPreset('pomodoro')" class="btn btn-outline">Pomodoro</button>
+                            <button @click="loadPreset('30')" class="btn btn-outline">30s</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom Presets -->
+                <div class="card bg-base-100 shadow-xl">
+                    <div class="card-body">
+                        <h2 class="card-title mb-4">Custom Presets</h2>
+                        <div class="flex gap-2 mb-4">
+                            <input type="text" x-model="newPresetName" 
+                                   placeholder="Enter preset name" 
+                                   class="input input-bordered flex-1">
+                            <button @click="saveCustomPreset()" 
+                                    class="btn btn-primary">
+                                💾 Save
+                            </button>
+                        </div>
+                        <div class="space-y-2">
+                            <template x-for="(preset, name) in customPresets" :key="name">
+                                <div class="flex justify-between items-center">
+                                    <button @click="loadCustomPreset(name)" 
+                                            class="btn btn-ghost text-left flex-1" 
+                                            x-text="name">
+                                    </button>
+                                    <button @click="deleteCustomPreset(name)" 
+                                            class="btn btn-ghost btn-sm text-error">
+                                        🗑️
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="card bg-base-100 shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title text-2xl mb-6">Custom Settings</h2>
+                    
+                    <!-- Work Time -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text text-lg font-medium">Work Time</span>
+                            <span class="label-text-alt text-lg font-bold" x-text="settings.workTime + 's'"></span>
+                        </label>
+                        <input type="range" x-model.number="settings.workTime" 
+                               min="5" max="60" step="5" 
+                               class="range range-success range-sm">
+                        <div class="w-full flex justify-between text-sm px-2">
+                            <span>5s</span>
+                            <span>60s</span>
+                        </div>
+                    </div>
+
+                    <!-- Rest Time -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text text-lg font-medium">Rest Time</span>
+                            <span class="label-text-alt text-lg font-bold" x-text="settings.restTime + 's'"></span>
+                        </label>
+                        <input type="range" x-model.number="settings.restTime" 
+                               min="0" max="60" step="5" 
+                               class="range range-error range-sm">
+                        <div class="w-full flex justify-between text-sm px-2">
+                            <span>0s</span>
+                            <span>60s</span>
+                        </div>
+                    </div>
+
+                    <!-- Rounds -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text text-lg font-medium">Number of Rounds</span>
+                            <span class="label-text-alt text-lg font-bold" x-text="settings.rounds"></span>
+                        </label>
+                        <input type="range" x-model.number="settings.rounds" 
+                               min="1" max="20" step="1" 
+                               class="range range-primary range-sm">
+                        <div class="w-full flex justify-between text-sm px-2">
+                            <span>1</span>
+                            <span>20</span>
+                        </div>
+                    </div>
+
+                    <!-- Warm-up Time -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text text-lg font-medium">Warm-up Time</span>
+                            <span class="label-text-alt text-lg font-bold" x-text="settings.warmupTime + 's'"></span>
+                        </label>
+                        <input type="range" x-model.number="settings.warmupTime" 
+                               min="0" max="300" step="10" 
+                               class="range range-warning range-sm">
+                        <div class="w-full flex justify-between text-sm px-2">
+                            <span>0s</span>
+                            <span>300s</span>
+                        </div>
+                    </div>
+
+                    <!-- Cool-down Time -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text text-lg font-medium">Cool-down Time</span>
+                            <span class="label-text-alt text-lg font-bold" x-text="settings.cooldownTime + 's'"></span>
+                        </label>
+                        <input type="range" x-model.number="settings.cooldownTime" 
+                               min="0" max="300" step="10" 
+                               class="range range-info range-sm">
+                        <div class="w-full flex justify-between text-sm px-2">
+                            <span>0s</span>
+                            <span>300s</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Celebration Container -->
+    <div id="celebrationContainer" class="celebration-container" style="display: none;"></div>
+
+    <!-- Audio Elements -->
+    <audio id="startSound" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"></audio>
+    <audio id="endSound" src="https://assets.mixkit.co/active_storage/sfx/2569/2569-preview.mp3"></audio>
+
+    <script src="app.js"></script>
+</body>
+</html>
