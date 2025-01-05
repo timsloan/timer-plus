@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HIIT Timer</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <title>Timer Plus - A Simple HIIT Timer - by Tim Sloan</title>
     <!-- Tailwind and DaisyUI -->
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
@@ -49,7 +50,7 @@
 <body class="min-h-screen bg-base-200">
     <div x-data="timerApp()" x-cloak class="container mx-auto px-4 py-8">
         <!-- Header -->
-        <h1 class="text-4xl font-bold text-center mb-8">HIIT Timer</h1>
+        <h1 class="text-4xl font-bold text-center mb-8">Timer Plus</h1>
 
         <!-- Main Timer Display -->
         <div class="card mb-8 transition-colors duration-300"
@@ -250,7 +251,31 @@
             </div>
         </div>
     </div>
-
+    <!-- Footer -->
+    <footer class="footer footer-center p-10 bg-base-200 text-base-content rounded">
+        <div class="max-w-md text-center">
+            <p class="text-lg">Built with ❤️ by Tim Sloan</p>
+            <p class="text-sm mt-2">A simple yet powerful HIIT timer for your training needs. No ads, no tracking, just functionality.</p>
+        </div>
+        <div>
+            <div class="grid grid-flow-col gap-4">
+                <a href="https://github.com/timsloan/timer-plus" 
+                   class="link link-hover" 
+                   target="_blank" 
+                   rel="noopener noreferrer">GitHub</a>
+                <a href="https://www.askfor10.com/" 
+                   class="link link-hover" 
+                   target="_blank" 
+                   rel="noopener noreferrer">Ask For 10</a>
+                <a href="LICENSE" 
+                   class="link link-hover" 
+                   target="_blank">License</a>
+            </div>
+        </div>
+        <div>
+            <p>Copyright 2025 - All rights reserved</p>
+        </div>
+    </footer>
     <!-- Celebration Container -->
     <div id="celebrationContainer" class="celebration-container" style="display: none;"></div>
 
