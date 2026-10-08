@@ -6,10 +6,11 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <title>Timer Plus - A Simple HIIT Timer - by Tim Sloan</title>
     <!-- Tailwind and DaisyUI -->
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.css" rel="stylesheet" type="text/css" />
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5.7.47/daisyui.css" rel="stylesheet" type="text/css" />
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5.7.47/themes.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.3"></script>
     <!-- Alpine.js -->
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.17.4/dist/cdn.min.js"></script>
     <!-- Custom styles -->
     <style>
         [x-cloak] { display: none !important; }
@@ -47,24 +48,43 @@
         }
     </style>
 </head>
-<body class="min-h-screen bg-base-200">
-    <div x-data="timerApp()" x-cloak class="container mx-auto px-4 py-8">
+<body class="min-h-screen bg-base-200" style="overflow-anchor: none">
+    <div x-data="timerApp()" x-cloak @scroll.window.passive="scrolled = window.scrollY > 10 ? true : (window.scrollY === 0 ? false : scrolled)" class="container mx-auto px-4 py-8">
         <!-- Header -->
-        <h1 class="text-4xl font-bold text-center mb-8">Timer Plus</h1>
+        <header :class="{'max-md:hidden': scrolled}">
+            <h1 class="text-4xl font-bold text-center">Timer Plus</h1>
+            <p class="text-center opacity-70 mb-8">A simple interval timer for HIIT, Tabata and focus sessions</p>
+        </header>
 
-        <!-- Main Timer Display -->
-        <div class="card mb-8 transition-colors duration-300"
+        <!-- Compact timer shown on mobile when the main timer is scrolled out of view -->
+        <div x-show="!timerVisible" x-transition x-cloak
+             class="md:hidden fixed top-0 inset-x-0 z-20 flex items-center justify-between gap-3 px-4 py-2 shadow-lg"
              :class="{
                 'bg-success text-success-content': phase === 'work',
                 'bg-error text-error-content': phase === 'rest',
                 'bg-warning text-warning-content': phase === 'warmup',
                 'bg-info text-info-content': phase === 'cooldown',
-                'bg-base-100': phase === 'ready',
-                'opacity-75': !isRunning && phase !== 'ready'
+                'bg-base-100 text-base-content': phase === 'ready'
+             }">
+            <span class="font-mono text-2xl font-bold" x-text="formatTime(currentTime)"></span>
+            <span class="font-bold" x-text="phase.toUpperCase()"></span>
+            <button @click="toggleTimer()" class="btn btn-sm btn-neutral"
+                    x-text="isRunning ? 'Pause' : 'Start'"></button>
+        </div>
+
+        <!-- Main Timer Display -->
+        <div x-ref="timerCard" class="card mb-8 transition-colors duration-300"
+             :class="{
+                'bg-success text-success-content': phase === 'work',
+                'bg-error text-error-content': phase === 'rest',
+                'bg-warning text-warning-content': phase === 'warmup',
+                'bg-info text-info-content': phase === 'cooldown',
+                'bg-base-100': phase === 'ready'
              }">
             <div class="card-body items-center text-center">
                 <!-- Total Duration Preview -->
-                <div class="opacity-80 mb-2">
+                <div class="text-lg font-medium mb-1" x-show="activePresetName()" x-text="activePresetName()"></div>
+                <div class="text-lg mb-2">
                     Total Duration: <span x-text="formatTime(calculateTotalDuration())"></span>
                 </div>
                 
@@ -74,46 +94,41 @@
                 </div>
                 
                 <!-- Round Counter -->
-                <div class="text-lg mb-2" x-show="phase !== 'ready' && phase !== 'warmup' && phase !== 'cooldown'">
+                <div class="text-xl mb-2" x-show="phase !== 'ready' && phase !== 'warmup' && phase !== 'cooldown'">
                     Round <span x-text="currentRound"></span>/<span x-text="settings.rounds"></span>
                 </div>
                 
                 <!-- Phase Indicator -->
-                <div class="text-2xl font-bold mb-4" x-text="phase.toUpperCase()">
+                <div class="text-2xl font-bold mb-4" role="status" aria-live="polite" x-text="phase.toUpperCase()">
                     READY
                 </div>
                 
                 <!-- Progress Bar -->
-                <div class="w-full bg-black/20 rounded-full h-2.5 mb-4">
-                    <div class="h-full rounded-full transition-all duration-1000 bg-black/20"
+                <div class="w-full bg-current/20 rounded-full h-2.5 mb-4 overflow-hidden"
+                     role="progressbar" aria-label="Workout progress" aria-valuemin="0" aria-valuemax="100"
+                     :aria-valuenow="Math.round(progress)">
+                    <div class="h-full rounded-full transition-all duration-1000 bg-current"
                          :style="'width: ' + progress + '%'">
                     </div>
                 </div>
 
                 <!-- Controls -->
                 <div class="flex flex-wrap gap-4 justify-center mt-4">
-                    <button @click="toggleTimer()" 
-                            class="btn btn-lg text-xl min-w-[120px]"
-                            :class="{
-                                'btn-outline': !isRunning,
-                                'btn-error btn-outline': isRunning
-                            }"
+                    <button @click="toggleTimer()"
+                            class="btn btn-lg btn-neutral text-xl min-w-[120px]"
                             x-text="isRunning ? 'Pause' : 'Start'">
                         Start
                     </button>
-                    <button @click="resetTimer()" 
-                            class="btn btn-lg text-xl min-w-[120px]"
-                            :class="{
-                                'btn-outline': isRunning,
-                                'btn-outline btn-neutral': !isRunning
-                            }">
+                    <button @click="resetTimer()"
+                            class="btn btn-lg btn-outline text-xl min-w-[120px]">
                         Reset
                     </button>
-                    <button @click="toggleSound()" 
-                            class="btn btn-lg text-2xl btn-outline"
-                            :class="{'btn-active': soundEnabled}">
-                        <span x-show="soundEnabled">🔊</span>
-                        <span x-show="!soundEnabled">🔇</span>
+                    <button @click="toggleSound()"
+                            class="btn btn-lg btn-outline text-2xl"
+                            :class="{'opacity-60': !soundEnabled}"
+                            :aria-label="soundEnabled ? 'Mute sound' : 'Unmute sound'">
+                        <span x-show="soundEnabled" aria-hidden="true">🔊</span>
+                        <span x-show="!soundEnabled" aria-hidden="true">🔇</span>
                     </button>
                 </div>
             </div>
@@ -127,12 +142,30 @@
                     <div class="card-body">
                         <h2 class="card-title">Preset Workouts</h2>
                         <div class="grid grid-cols-2 gap-2">
-                            <button @click="loadPreset('tabata')" class="btn btn-outline">Tabata</button>
-                            <button @click="loadPreset('30-30')" class="btn btn-outline">30/30</button>
-                            <button @click="loadPreset('40-20')" class="btn btn-outline">40/20</button>
-                            <button @click="loadPreset('45-15')" class="btn btn-outline">45/15</button>
-                            <button @click="loadPreset('pomodoro')" class="btn btn-outline">Pomodoro</button>
-                            <button @click="loadPreset('30')" class="btn btn-outline">30s</button>
+                            <button @click="loadPreset('tabata')" class="btn"
+                                    :class="isActivePreset('tabata') ? 'btn-neutral' : 'btn-outline'"
+                                    :aria-pressed="isActivePreset('tabata')">Tabata</button>
+                            <button @click="loadPreset('30-30')" class="btn"
+                                    :class="isActivePreset('30-30') ? 'btn-neutral' : 'btn-outline'"
+                                    :aria-pressed="isActivePreset('30-30')">30/30</button>
+                            <button @click="loadPreset('40-20')" class="btn"
+                                    :class="isActivePreset('40-20') ? 'btn-neutral' : 'btn-outline'"
+                                    :aria-pressed="isActivePreset('40-20')">40/20</button>
+                            <button @click="loadPreset('45-15')" class="btn"
+                                    :class="isActivePreset('45-15') ? 'btn-neutral' : 'btn-outline'"
+                                    :aria-pressed="isActivePreset('45-15')">45/15</button>
+                            <button @click="loadPreset('pomodoro')" class="btn"
+                                    :class="isActivePreset('pomodoro') ? 'btn-neutral' : 'btn-outline'"
+                                    :aria-pressed="isActivePreset('pomodoro')">Pomodoro</button>
+                            <button @click="loadPreset('7-minute')" class="btn"
+                                    :class="isActivePreset('7-minute') ? 'btn-neutral' : 'btn-outline'"
+                                    :aria-pressed="isActivePreset('7-minute')">7-Minute</button>
+                            <button @click="loadPreset('emom')" class="btn"
+                                    :class="isActivePreset('emom') ? 'btn-neutral' : 'btn-outline'"
+                                    :aria-pressed="isActivePreset('emom')">EMOM 10</button>
+                            <button @click="loadPreset('30')" class="btn"
+                                    :class="isActivePreset('30') ? 'btn-neutral' : 'btn-outline'"
+                                    :aria-pressed="isActivePreset('30')">30s</button>
                         </div>
                     </div>
                 </div>
@@ -142,24 +175,29 @@
                     <div class="card-body">
                         <h2 class="card-title mb-4">Custom Presets</h2>
                         <div class="flex gap-2 mb-4">
-                            <input type="text" x-model="newPresetName" 
+                            <input type="text" x-model="newPresetName" aria-label="Preset name" @keydown.enter="saveCustomPreset()"
                                    placeholder="Enter preset name" 
-                                   class="input input-bordered flex-1">
+                                   class="input flex-1">
                             <button @click="saveCustomPreset()" 
                                     class="btn btn-primary">
-                                💾 Save
+                                <span aria-hidden="true">💾</span> Save
                             </button>
                         </div>
+                        <p class="text-sm opacity-70" x-show="Object.keys(customPresets).length === 0">
+                            No saved presets yet. Adjust the settings, name them above and hit Save.
+                        </p>
                         <div class="space-y-2">
                             <template x-for="(preset, name) in customPresets" :key="name">
                                 <div class="flex justify-between items-center">
-                                    <button @click="loadCustomPreset(name)" 
-                                            class="btn btn-ghost text-left flex-1" 
+                                    <button @click="loadCustomPreset(name)"
+                                            class="btn btn-ghost justify-start flex-1"
+                                            :class="{'btn-active font-bold': activePresetName() === name}"
                                             x-text="name">
                                     </button>
-                                    <button @click="deleteCustomPreset(name)" 
-                                            class="btn btn-ghost btn-sm text-error">
-                                        🗑️
+                                    <button @click="deleteCustomPreset(name)"
+                                            class="btn btn-ghost btn-sm text-error"
+                                            :aria-label="'Delete preset ' + name">
+                                        <span aria-hidden="true">🗑️</span>
                                     </button>
                                 </div>
                             </template>
@@ -174,75 +212,75 @@
                     <h2 class="card-title text-2xl mb-6">Custom Settings</h2>
                     
                     <!-- Work Time -->
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text text-lg font-medium">Work Time</span>
-                            <span class="label-text-alt text-lg font-bold" x-text="settings.workTime + 's'"></span>
+                    <div class="flex flex-col">
+                        <label for="workTime" class="flex justify-between items-center py-2">
+                            <span class="text-lg font-medium">Work Time</span>
+                            <span class="text-lg font-bold" x-text="settings.workTime + 's'"></span>
                         </label>
-                        <input type="range" x-model.number="settings.workTime" 
-                               min="5" max="60" step="5" 
-                               class="range range-success range-sm">
-                        <div class="w-full flex justify-between text-sm px-2">
+                        <input type="range" id="workTime" x-model.number="settings.workTime" 
+                               min="5" max="180" step="5" 
+                               class="range w-full range-success range-sm">
+                        <div class="w-full flex justify-between text-sm mt-1">
                             <span>5s</span>
-                            <span>60s</span>
+                            <span>180s</span>
                         </div>
                     </div>
 
                     <!-- Rest Time -->
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text text-lg font-medium">Rest Time</span>
-                            <span class="label-text-alt text-lg font-bold" x-text="settings.restTime + 's'"></span>
+                    <div class="flex flex-col">
+                        <label for="restTime" class="flex justify-between items-center py-2">
+                            <span class="text-lg font-medium">Rest Time</span>
+                            <span class="text-lg font-bold" x-text="settings.restTime + 's'"></span>
                         </label>
-                        <input type="range" x-model.number="settings.restTime" 
-                               min="0" max="60" step="5" 
-                               class="range range-error range-sm">
-                        <div class="w-full flex justify-between text-sm px-2">
+                        <input type="range" id="restTime" x-model.number="settings.restTime" 
+                               min="0" max="180" step="5" 
+                               class="range w-full range-error range-sm">
+                        <div class="w-full flex justify-between text-sm mt-1">
                             <span>0s</span>
-                            <span>60s</span>
+                            <span>180s</span>
                         </div>
                     </div>
 
                     <!-- Rounds -->
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text text-lg font-medium">Number of Rounds</span>
-                            <span class="label-text-alt text-lg font-bold" x-text="settings.rounds"></span>
+                    <div class="flex flex-col">
+                        <label for="rounds" class="flex justify-between items-center py-2">
+                            <span class="text-lg font-medium">Number of Rounds</span>
+                            <span class="text-lg font-bold" x-text="settings.rounds"></span>
                         </label>
-                        <input type="range" x-model.number="settings.rounds" 
+                        <input type="range" id="rounds" x-model.number="settings.rounds" 
                                min="1" max="20" step="1" 
-                               class="range range-primary range-sm">
-                        <div class="w-full flex justify-between text-sm px-2">
+                               class="range w-full range-primary range-sm">
+                        <div class="w-full flex justify-between text-sm mt-1">
                             <span>1</span>
                             <span>20</span>
                         </div>
                     </div>
 
                     <!-- Warm-up Time -->
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text text-lg font-medium">Warm-up Time</span>
-                            <span class="label-text-alt text-lg font-bold" x-text="settings.warmupTime + 's'"></span>
+                    <div class="flex flex-col">
+                        <label for="warmupTime" class="flex justify-between items-center py-2">
+                            <span class="text-lg font-medium">Warm-up Time</span>
+                            <span class="text-lg font-bold" x-text="settings.warmupTime + 's'"></span>
                         </label>
-                        <input type="range" x-model.number="settings.warmupTime" 
+                        <input type="range" id="warmupTime" x-model.number="settings.warmupTime" 
                                min="0" max="300" step="10" 
-                               class="range range-warning range-sm">
-                        <div class="w-full flex justify-between text-sm px-2">
+                               class="range w-full range-warning range-sm">
+                        <div class="w-full flex justify-between text-sm mt-1">
                             <span>0s</span>
                             <span>300s</span>
                         </div>
                     </div>
 
                     <!-- Cool-down Time -->
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text text-lg font-medium">Cool-down Time</span>
-                            <span class="label-text-alt text-lg font-bold" x-text="settings.cooldownTime + 's'"></span>
+                    <div class="flex flex-col">
+                        <label for="cooldownTime" class="flex justify-between items-center py-2">
+                            <span class="text-lg font-medium">Cool-down Time</span>
+                            <span class="text-lg font-bold" x-text="settings.cooldownTime + 's'"></span>
                         </label>
-                        <input type="range" x-model.number="settings.cooldownTime" 
+                        <input type="range" id="cooldownTime" x-model.number="settings.cooldownTime" 
                                min="0" max="300" step="10" 
-                               class="range range-info range-sm">
-                        <div class="w-full flex justify-between text-sm px-2">
+                               class="range w-full range-info range-sm">
+                        <div class="w-full flex justify-between text-sm mt-1">
                             <span>0s</span>
                             <span>300s</span>
                         </div>
@@ -252,8 +290,10 @@
         </div>
     </div>
     <!-- Footer -->
-    <footer class="footer footer-center p-10 bg-base-200 text-base-content rounded">
+    <footer class="flex flex-col items-center gap-6 p-10 mt-8 border-t border-base-300 bg-base-200 text-base-content text-center">
         <div class="max-w-md text-center">
+            <p class="text-2xl font-bold">Timer Plus</p>
+            <p class="opacity-70 mb-4">A simple interval timer for HIIT, Tabata and focus sessions</p>
             <p class="text-lg">Built with ❤️ by Tim Sloan</p>
             <p class="text-sm mt-2">A simple yet powerful HIIT timer for your training needs. No ads, no tracking, just functionality.</p>
         </div>
@@ -273,7 +313,7 @@
             </div>
         </div>
         <div>
-            <p>Copyright 2025 - All rights reserved</p>
+            <p>Copyright <span id="copyrightYear">2026</span> - All rights reserved</p>
         </div>
     </footer>
     <!-- Celebration Container -->
@@ -284,5 +324,6 @@
     <audio id="endSound" src="https://assets.mixkit.co/active_storage/sfx/2569/2569-preview.mp3"></audio>
 
     <script src="app.js"></script>
+<script>document.getElementById("copyrightYear").textContent = new Date().getFullYear();</script>
 </body>
 </html>

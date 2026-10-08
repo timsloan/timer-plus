@@ -1,3 +1,14 @@
+const PRESETS = {
+    'tabata':   { label: 'Tabata',   settings: { workTime: 20,   restTime: 10,  rounds: 8,  warmupTime: 0,  cooldownTime: 0 } },
+    '30-30':    { label: '30/30',    settings: { workTime: 30,   restTime: 30,  rounds: 10, warmupTime: 0,  cooldownTime: 0 } },
+    '40-20':    { label: '40/20',    settings: { workTime: 40,   restTime: 20,  rounds: 8,  warmupTime: 0,  cooldownTime: 0 } },
+    '45-15':    { label: '45/15',    settings: { workTime: 45,   restTime: 15,  rounds: 8,  warmupTime: 0,  cooldownTime: 0 } },
+    'pomodoro': { label: 'Pomodoro', settings: { workTime: 1500, restTime: 300, rounds: 1,  warmupTime: 0,  cooldownTime: 0 } },
+    '7-minute': { label: '7-Minute', settings: { workTime: 30,   restTime: 10,  rounds: 12, warmupTime: 0,  cooldownTime: 0 } },
+    'emom':     { label: 'EMOM 10',  settings: { workTime: 60,   restTime: 0,   rounds: 10, warmupTime: 0,  cooldownTime: 0 } },
+    '30':       { label: '30s',      settings: { workTime: 30,   restTime: 0,   rounds: 10, warmupTime: 30, cooldownTime: 0 } }
+};
+
 function timerApp() {
     return {
         currentTime: 0,
@@ -16,6 +27,8 @@ function timerApp() {
         },
         customPresets: {},
         newPresetName: '',
+        timerVisible: true,
+        scrolled: false,
 
         init() {
             // Load custom presets from localStorage
@@ -30,6 +43,10 @@ function timerApp() {
             
             // Add keyboard shortcuts
             window.addEventListener('keydown', (e) => {
+                // Don't hijack keys while typing or when a control has focus for Space
+                const tag = e.target.tagName;
+                if (tag === 'INPUT' && e.target.type === 'text' || tag === 'TEXTAREA') return;
+                if (e.code === 'Space' && (tag === 'BUTTON' || tag === 'INPUT')) return;
                 if (e.code === 'Space') {
                     e.preventDefault();
                     this.toggleTimer();
@@ -39,6 +56,11 @@ function timerApp() {
                     this.toggleSound();
                 }
             });
+
+            // Show a compact mini timer on mobile when the main timer scrolls out of view
+            new IntersectionObserver(([entry]) => {
+                this.timerVisible = entry.isIntersecting;
+            }).observe(this.$refs.timerCard);
 
             // Watch for settings changes
             this.$watch('settings', (value) => {
@@ -185,7 +207,7 @@ function timerApp() {
                 return;
             }
             const remainingDuration = this.calculateRemainingDuration();
-            this.progress = ((totalDuration - remainingDuration) / totalDuration) * 100;
+            this.progress = Math.min(100, Math.max(0, ((totalDuration - remainingDuration) / totalDuration) * 100));
         },
 
         calculateTotalDuration() {
@@ -201,9 +223,10 @@ function timerApp() {
             let remaining = this.currentTime;
             
             if (this.phase === 'work' || this.phase === 'rest') {
+                // Each remaining round is work + rest, except the final round has no trailing rest
                 remaining += (this.settings.rounds - this.currentRound) * (this.settings.workTime + this.settings.restTime);
-                if (this.phase === 'work') {
-                    remaining += this.settings.restTime;
+                if (this.phase === 'rest') {
+                    remaining -= this.settings.restTime;
                 }
                 if (this.settings.cooldownTime > 0) {
                     remaining += this.settings.cooldownTime;
@@ -245,63 +268,26 @@ function timerApp() {
         },
 
         loadPreset(type) {
-            switch(type) {
-                case 'pomodoro':
-                    this.settings = {
-                        workTime: 1500, // 25 minutes
-                        restTime: 300,  // 5 minutes
-                        rounds: 1,
-                        warmupTime: 0,
-                        cooldownTime: 0
-                    };
-                    break;
-                case '30':
-                    this.settings = {
-                        workTime: 30,
-                        restTime: 0,
-                        rounds: 10,
-                        warmupTime: 30,
-                        cooldownTime: 0
-                    };
-                    break;
-                case 'tabata':
-                    this.settings = {
-                        workTime: 20,
-                        restTime: 10,
-                        rounds: 8,
-                        warmupTime: 0,
-                        cooldownTime: 0
-                    };
-                    break;
-                case '30-30':
-                    this.settings = {
-                        workTime: 30,
-                        restTime: 30,
-                        rounds: 10,
-                        warmupTime: 0,
-                        cooldownTime: 0
-                    };
-                    break;
-                case '40-20':
-                    this.settings = {
-                        workTime: 40,
-                        restTime: 20,
-                        rounds: 8,
-                        warmupTime: 0,
-                        cooldownTime: 0
-                    };
-                    break;
-                case '45-15':
-                    this.settings = {
-                        workTime: 45,
-                        restTime: 15,
-                        rounds: 8,
-                        warmupTime: 0,
-                        cooldownTime: 0
-                    };
-                    break;
+            if (PRESETS[type]) {
+                this.settings = { ...PRESETS[type].settings };
+                this.resetTimer();
             }
-            this.resetTimer();
+        },
+
+        // Name of the preset matching the current settings (built-in or custom), or ''
+        activePresetName() {
+            const same = (p) => Object.keys(this.settings).every(k => this.settings[k] === p[k]);
+            for (const preset of Object.values(PRESETS)) {
+                if (same(preset.settings)) return preset.label;
+            }
+            for (const [name, preset] of Object.entries(this.customPresets)) {
+                if (same(preset)) return name;
+            }
+            return '';
+        },
+
+        isActivePreset(type) {
+            return this.activePresetName() === PRESETS[type].label;
         },
 
         saveCustomPreset() {
